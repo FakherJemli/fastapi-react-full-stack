@@ -52,7 +52,7 @@ jobs:
       - name: Install pip-audit
         run: pip install pip-audit
       - name: Audit dependencies
-        # DevOpsGen: audit-grace-period-until: 2026-11-29
+        # DevOpsGen: audit-grace-period-until: 2026-11-30
         run: |
           if [ -f requirements.txt ]; then
             pip-audit -r requirements.txt --vulnerability-service pypi
@@ -68,6 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
+      security-events: write
       contents: read
     defaults:
       run:
@@ -97,6 +98,20 @@ jobs:
             echo 'enforce-tests has no effect here - there is nothing to run.'
             echo 'Add DevOpsGen test-scaffolding, or add tests of your own, to enable this stage.'
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Lint Dockerfile (backend/Dockerfile)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: backend/Dockerfile
+          format: sarif
+          output-file: hadolint-results.sarif
+          no-fail: true
+        continue-on-error: true
+      - name: Upload Hadolint SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: hadolint-results.sarif
+        continue-on-error: true
 
       - name: Upload JUnit test results
         if: always()
@@ -125,11 +140,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # GHCR requires all-lowercase image names
+      # GHCR requires all-lowercase names, and a Docker reference component
+      # may only contain [a-z0-9._-] and must start AND end alphanumeric.
+      # Lowercasing alone is not enough: a repository called e.g.
+      # "spring-petclinic-" produced "ghcr.io/owner/spring-petclinic-", which
+      # buildx rejects with "invalid reference format" before it builds
+      # anything. Strip the invalid characters instead of failing the run.
       - name: Normalise image name
         id: img
         run: |
-          echo "name=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          slug=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9._/-]+#-#g; s#(^|/)[._-]+#\1#g; s#[._-]+(/|$)#\1#g')
+          echo "name=ghcr.io/$slug-backend" >> "$GITHUB_OUTPUT"
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
