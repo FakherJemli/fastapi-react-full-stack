@@ -348,8 +348,23 @@ jobs:
       needs.trivy-scan.outputs.grade != 'D'
 
     steps:
-      - name: Deploy via SSH
+      - name: Preflight SSH connectivity
+        id: ssh_preflight
         if: env.SSH_HOST != ''
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+        run: |
+          set -eu
+          SSH_PORT="${{ secrets.SSH_PORT || '22' }}"
+          if timeout 5 bash -c "cat < /dev/null > /dev/tcp/$SSH_HOST/$SSH_PORT" 2>/dev/null; then
+            echo "reachable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=Deploy skipped::Cannot reach $SSH_HOST:$SSH_PORT from GitHub runner; skipping deploy."
+            echo "reachable=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy via SSH
+        if: env.SSH_HOST != '' && steps.ssh_preflight.outputs.reachable == 'true'
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
         uses: appleboy/ssh-action@v1
