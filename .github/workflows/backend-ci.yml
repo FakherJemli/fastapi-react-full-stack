@@ -165,7 +165,7 @@ jobs:
         with:
           images: ${{ steps.img.outputs.name }}
           tags: |
-            type=sha,prefix=sha-
+            type=sha,prefix=sha-,format=long
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Set up Docker Buildx
@@ -191,6 +191,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
+      packages: read
 
     outputs:
       grade:    ${{ steps.grade.outputs.grade }}
@@ -199,6 +200,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Trivy image scan
         id: trivy
@@ -286,8 +293,8 @@ jobs:
           "
 
       - name: Upload SARIF to GitHub Security tab
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
         continue-on-error: true
