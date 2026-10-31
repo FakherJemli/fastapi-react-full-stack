@@ -348,6 +348,16 @@ jobs:
       needs.trivy-scan.outputs.grade != 'D'
 
     steps:
+      - name: Diagnose SSH host fingerprints
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+         run: |
+           echo "Checking SSH host keys exposed by the server..."
+           ssh-keyscan -T 10 -p "$SSH_PORT" \
+             -t ed25519,ecdsa,rsa "$SSH_HOST" 2>/dev/null \
+             | ssh-keygen -lf -
+
       - name: Deploy via SSH
         if: env.SSH_HOST != ''
         env:
