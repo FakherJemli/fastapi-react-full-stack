@@ -34,6 +34,12 @@ from routers import users
 # FastAPI() creates your app instance. All configuration hangs off this object.
 # In production, you might pass: title="My API", version="1.0.0", docs_url="/api/docs"
 app = FastAPI()
+@app.get("/health", include_in_schema=False)
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": "fastapi-backend"
+    }
 
 # -----------------------------------------------------------------------------
 # CORS (Cross-Origin Resource Sharing) MIDDLEWARE
